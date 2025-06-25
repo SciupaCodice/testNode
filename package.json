@@ -1,0 +1,26 @@
+{
+  "name": "chatbot-groq",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --dns-result-order=ipv4first index.js",
+    "dev": "node --watch index.js"
+  },
+  "type": "module",
+  "keywords": [
+    "chatbot",
+    "ollama",
+    "ai",
+    "nodejs",
+    "windows"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "express": "^5.1.0",
+    "ollama": "^0.5.16",
+    "ora": "^8.2.0"
+  }
+}
