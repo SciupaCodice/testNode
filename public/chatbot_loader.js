@@ -543,6 +543,13 @@
                         <div class="preset-color" style="background: #20c997" data-color="#20c997" data-target="user"></div>
                     </div>
                 </div>
+                <div class="setting-group">
+                    <label for="chat-position">Posizione Chat:</label>
+                    <select id="chat-position">
+                        <option value="right" ${settings.chatPosition === 'right' ? 'selected' : ''}>Destra</option>
+                        <option value="left" ${settings.chatPosition === 'left' ? 'selected' : ''}>Sinistra</option>
+                    </select>
+                </div>
             </div>
             <div class="buttons">
                 <button class="btn-save" id="save-settings">Salva</button>
@@ -577,8 +584,8 @@
         const inputArea = document.createElement('div');
         inputArea.className = 'chat-input-area';
         inputArea.innerHTML = `
-          <input type="text" id="user-input" placeholder="Scrivi un messaggio..." />
-          <button id="send-button">Invia</button>
+            <input type="text" id="user-input" placeholder="Scrivi un messaggio..." />
+            <button id="send-button">Invia</button>
         `;
         container.appendChild(inputArea);
 
@@ -675,6 +682,11 @@
             }
         });
 
+        document.getElementById('chat-position').addEventListener('change', (e) => {
+            settings.chatPosition = e.target.value;
+            updateStyles();
+        });
+
         // Preset color selection
         document.querySelectorAll('.preset-color').forEach(preset => {
             preset.addEventListener('click', (e) => {
@@ -697,7 +709,7 @@
             });
         });
 
-        document.getElementById('save-settings').addEventListener('click', async () => { // <-- Rendi la funzione async
+        document.getElementById('save-settings').addEventListener('click', async () => {
             try {
                 saveSettingsToLocalStorage();
                 settingsPanel.style.display = 'none';
@@ -716,7 +728,7 @@
                 document.getElementById('header-color').value = settings.headerColor;
                 document.getElementById('bot-bubble-color').value = settings.botBubbleColor;
                 document.getElementById('user-bubble-color').value = settings.userBubbleColor;
-                document.getElementById('chat-position').value = settings.chatPosition;
+                document.getElementById('chat-position').value = settings.chatPosition; // Resetta anche la posizione
                 updateColorPreviews();
                 updateStyles();
             }
@@ -803,56 +815,92 @@
                 thinkTxt.textContent = 'Pensando' + '.'.repeat(dots);
             }, 500);
 
+            // Inizia la parte di gestione dello stream
+            let fullBotResponse = '';
             try {
-                const res = await fetch(CHATBOT_API_URL, {
+                const response = await fetch(CHATBOT_API_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: txt, model, conversation })
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: txt, conversation: conversation, model: model }),
                 });
-                if (!res.ok) throw new Error(res.status);
 
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let buf = '', first = true;
-                clearInterval(thinkingInterval);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                
+                // Rimuovi il messaggio "Pensando..."
                 messages.removeChild(think);
+
+                // Crea la bolla del bot dove verrà scritto il testo in streaming
+                currentBubble = addMessage('', 'bot'); // Aggiungi una bolla vuota per il bot
 
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
-                    buf += decoder.decode(value, { stream: true });
-                    const parts = buf.split('\n\n');
-                    buf = parts.pop();
-                    for (const line of parts) {
-                        if (!line.startsWith('data: ')) continue;
-                        const data = JSON.parse(line.slice(6));
-                        if (data.type === 'chunk') {
-                            if (first) {
-                                currentBubble = addMessage('', 'bot');
-                                first = false;
+                    if (done) {
+                        break;
+                    }
+                    // Data è un Uint8Array, decodificalo in stringa
+                    const chunk = decoder.decode(value, { stream: true });
+
+                    // I dati SSE sono nel formato "data: {json}\n\n"
+                    // Potrebbe esserci più di un evento in un singolo chunk, o un evento spezzato
+                    const events = chunk.split('\n\n').filter(s => s.startsWith('data: ')).map(s => s.substring(6));
+
+                    for (const event of events) {
+                        try {
+                            const parsedData = JSON.parse(event);
+                            if (parsedData.type === 'chunk') {
+                                fullBotResponse += parsedData.content;
+                                currentBubble.innerHTML = `<span class="icon">🤖</span>${fullBotResponse}`;
+                                messages.scrollTop = messages.scrollHeight; // Scrolla alla fine
+                            } else if (parsedData.type === 'end') {
+                                conversation = parsedData.conversation; // Aggiorna l'intera conversazione
+                                break; // Esci dal ciclo for (eventi)
+                            } else if (parsedData.type === 'error') {
+                                console.error('Errore dallo stream:', parsedData.error);
+                                currentBubble.innerHTML = `<span class="icon">🤖</span>Errore: ${parsedData.error}`;
+                                break;
                             }
-                            currentBubble.innerHTML += data.content;
-                            messages.scrollTop = messages.scrollHeight;
-                        } else if (data.type === 'end') {
-                            conversation = data.conversation;
+                        } catch (e) {
+                            console.warn('Errore nel parsing del JSON dello stream:', e, 'Chunk:', event);
+                            // Potrebbe essere un chunk parziale, o un errore non JSON, ignoralo per continuare lo stream
                         }
                     }
                 }
-            } catch (err) {
-                clearInterval(thinkingInterval);
-                messages.removeChild(think);
-                addMessage('Errore di connessione.', 'bot');
-            } finally {
-                sendButton.disabled = false;
+                
+                // Fine dello streaming
+                clearInterval(thinkingInterval); // Ferma l'animazione di pensiero
+                sendButton.disabled = false; // Riabilita il bottone di invio
+                userInput.focus(); // Riporta il focus sull'input
+                
+            } catch (error) {
+                clearInterval(thinkingInterval); // Ferma l'animazione di pensiero anche in caso di errore
+                sendButton.disabled = false; // Riabilita il bottone di invio
+                console.error('Errore nella richiesta di chat:', error);
+                // Gestione dell'errore sulla UI
+                if (currentBubble) {
+                    currentBubble.innerHTML = `<span class="icon">🤖</span>Si è verificato un errore durante la comunicazione: ${error.message}`;
+                } else {
+                    addMessage(`Si è verificato un errore durante la comunicazione: ${error.message}`, 'bot');
+                }
+                messages.scrollTop = messages.scrollHeight;
                 userInput.focus();
             }
         }
 
         sendButton.addEventListener('click', sendMessage);
-        userInput.addEventListener('keypress', e => {
-            if (e.key === 'Enter') sendMessage();
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
         });
     }
 
-    initializeChatbot();
+    // Inizializza il chatbot quando il DOM è completamente caricato
+    document.addEventListener('DOMContentLoaded', initializeChatbot);
 })();
