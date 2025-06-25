@@ -20,6 +20,7 @@
   "dependencies": {
     "chalk": "^5.4.1",
     "express": "^5.1.0",
+    "node-fetch": "^3.3.2",
     "ollama": "^0.5.16",
     "ora": "^8.2.0"
   }
