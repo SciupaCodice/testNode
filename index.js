@@ -1,116 +1,91 @@
+import { Ollama } from 'ollama';
 import express from 'express';
 import bodyParser from 'body-parser';
-import fetch from 'node-fetch'; // Aggiungi: npm install node-fetch
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 
-// API Groq invece di Ollama
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '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';
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const ollama = new Ollama({ host: 'https://ollamaspg.sogiscuola.eu/' });
+const model = 'llama3.2:3b';
 
-// Middleware CORS
+// Middleware per abilitare CORS (utile per lo sviluppo)
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS'); // Aggiungi i metodi consentiti
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     next();
 });
 
+// Middleware per parsare il body delle richieste JSON
 app.use(bodyParser.json());
 
-// Endpoint per i modelli disponibili
-app.get('/models', (req, res) => {
-    const availableModels = [
-        'llama-3.1-70b-versatile',
-        'llama-3.1-8b-instant',
-        'mixtral-8x7b-32768',
-        'gemma2-9b-it'
-    ];
-    res.json({ models: availableModels });
+// Endpoint per ottenere i modelli disponibili
+app.get('/models', async (req, res) => {
+    try {
+        const response = await fetch('https://ollamaspg.sogiscuola.eu/api/tags');
+        if (!response.ok) {
+            throw new Error(`Errore HTTP! Stato: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // Estrai solo i nomi dei modelli
+        const availableModels = data.models.map(model => model.name);
+        
+        res.json({ models: availableModels });
+    } catch (error) {
+        console.error('❌ Errore durante il recupero dei modelli da Ollama:', error.message);
+        res.status(500).json({ error: 'Impossibile recuperare i modelli disponibili in questo momento.' });
+    }
 });
 
-// Endpoint chat con Groq
+// Endpoint API per la chat
 app.post('/chat', async (req, res) => {
     const userInput = req.body.message;
     const conversation = req.body.conversation || [];
-    const selectedModel = req.body.model || 'llama-3.1-8b-instant';
+    const selectedModel = req.body.model || model;
 
     if (!userInput || userInput.trim() === '') {
         return res.status(400).json({ error: 'Il messaggio non può essere vuoto.' });
     }
 
+    conversation.push({ role: 'user', content: userInput.trim() });
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    let fullBotMessage = '';
+
     try {
-        const response = await fetch(GROQ_API_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${GROQ_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: selectedModel,
-                messages: [
-                    ...conversation,
-                    { role: 'user', content: userInput.trim() }
-                ],
-                stream: true,
-                max_tokens: 1024,
-                temperature: 0.7
-            }),
+        const responseStream = await ollama.chat({
+            model: selectedModel,
+            messages: conversation,
+            stream: true
         });
 
-        if (!response.ok) {
-            throw new Error(`Groq API error: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullBotMessage = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n');
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
-                    if (data === '[DONE]') continue;
-                    
-                    try {
-                        const parsed = JSON.parse(data);
-                        const content = parsed.choices?.[0]?.delta?.content || '';
-                        if (content) {
-                            fullBotMessage += content;
-                            res.write(`data: ${JSON.stringify({ type: 'chunk', content })}\n\n`);
-                        }
-                    } catch (e) {
-                        // Ignora errori di parsing
-                    }
-                }
+        for await (const chunk of responseStream) {
+            const content = chunk.message.content;
+            if (content) {
+                fullBotMessage += content;
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: content })}\n\n`);
             }
         }
 
-        conversation.push({ role: 'user', content: userInput.trim() });
         conversation.push({ role: 'assistant', content: fullBotMessage });
-        res.write(`data: ${JSON.stringify({ type: 'end', conversation })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'end', conversation: conversation })}\n\n`);
         res.end();
 
     } catch (error) {
-        console.error('❌ Errore Groq API:', error.message);
-        res.write(`data: ${JSON.stringify({ type: 'error', error: 'Errore del server' })}\n\n`);
+        console.error('❌ Errore durante la comunicazione con Ollama:', error.message);
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'Si è verificato un errore durante l\'elaborazione della richiesta.' })}\n\n`);
         res.end();
     }
 });
 
+// Serve i file statici dalla cartella 'public'
 app.use(express.static('public'));
 
+// Avvia il server
 app.listen(port, () => {
-    console.log(`🚀 Server online su porta ${port}`);
+    console.log(`🚀 Server Node.js in ascolto su http://localhost:${port}`);
 });
