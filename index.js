@@ -22,10 +22,7 @@ app.use(bodyParser.json());
 // Endpoint per i modelli disponibili
 app.get('/models', (req, res) => {
     const availableModels = [
-        'llama-3.1-70b-versatile',
-        'llama-3.1-8b-instant',
-        'mixtral-8x7b-32768',
-        'gemma2-9b-it'
+        'llama3.2:3b', 'llama3.2:7b', 'llama3.2:13b'
     ];
     res.json({ models: availableModels });
 });
