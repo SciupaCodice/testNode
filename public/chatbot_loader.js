@@ -817,6 +817,8 @@
 
             // Inizia la parte di gestione dello stream
             let fullBotResponse = '';
+            let currentBubble = null;
+            
             try {
                 const response = await fetch(CHATBOT_API_URL, {
                     method: 'POST',
@@ -835,61 +837,93 @@
                 
                 // Rimuovi il messaggio "Pensando..."
                 messages.removeChild(think);
+                clearInterval(thinkingInterval);
 
                 // Crea la bolla del bot dove verrà scritto il testo in streaming
-                currentBubble = addMessage('', 'bot'); // Aggiungi una bolla vuota per il bot
+                const botMessageDiv = document.createElement('div');
+                botMessageDiv.className = 'chat-message bot';
+                botMessageDiv.innerHTML = `<div class="bubble"><span class="icon">🤖</span><span class="content"></span></div>`;
+                messages.appendChild(botMessageDiv);
+                
+                const contentSpan = botMessageDiv.querySelector('.content');
+                let buffer = ''; // Buffer per gestire chunk parziali
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
                         break;
                     }
-                    // Data è un Uint8Array, decodificalo in stringa
+                    
+                    // Decodifica il chunk
                     const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
 
-                    // I dati SSE sono nel formato "data: {json}\n\n"
-                    // Potrebbe esserci più di un evento in un singolo chunk, o un evento spezzato
-                    const events = chunk.split('\n\n').filter(s => s.startsWith('data: ')).map(s => s.substring(6));
+                    // Processa tutti gli eventi completi nel buffer
+                    let lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Mantieni l'ultima riga parziale nel buffer
 
-                    for (const event of events) {
-                        try {
-                            const parsedData = JSON.parse(event);
-                            if (parsedData.type === 'chunk') {
-                                fullBotResponse += parsedData.content;
-                                currentBubble.innerHTML = `<span class="icon">🤖</span>${fullBotResponse}`;
-                                messages.scrollTop = messages.scrollHeight; // Scrolla alla fine
-                            } else if (parsedData.type === 'end') {
-                                conversation = parsedData.conversation; // Aggiorna l'intera conversazione
-                                break; // Esci dal ciclo for (eventi)
-                            } else if (parsedData.type === 'error') {
-                                console.error('Errore dallo stream:', parsedData.error);
-                                currentBubble.innerHTML = `<span class="icon">🤖</span>Errore: ${parsedData.error}`;
-                                break;
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const eventData = line.substring(6);
+                            
+                            // Salta eventi vuoti o di keep-alive
+                            if (!eventData.trim() || eventData.trim() === '[DONE]') {
+                                continue;
                             }
-                        } catch (e) {
-                            console.warn('Errore nel parsing del JSON dello stream:', e, 'Chunk:', event);
-                            // Potrebbe essere un chunk parziale, o un errore non JSON, ignoralo per continuare lo stream
+
+                            try {
+                                const parsedData = JSON.parse(eventData);
+                                
+                                if (parsedData.type === 'chunk') {
+                                    fullBotResponse += parsedData.content;
+                                    
+                                    // Aggiorna il contenuto in tempo reale
+                                    // Se hai una funzione per convertire markdown in HTML, usala qui
+                                    contentSpan.textContent = fullBotResponse;
+                                    // Oppure se vuoi supportare HTML/markdown:
+                                    // contentSpan.innerHTML = convertMarkdownToHTML(fullBotResponse);
+                                    
+                                    // Scrolla alla fine
+                                    messages.scrollTop = messages.scrollHeight;
+                                    
+                                } else if (parsedData.type === 'end') {
+                                    conversation = parsedData.conversation;
+                                    break;
+                                    
+                                } else if (parsedData.type === 'error') {
+                                    console.error('Errore dallo stream:', parsedData.error);
+                                    contentSpan.textContent = `Errore: ${parsedData.error}`;
+                                    break;
+                                }
+                            } catch (e) {
+                                console.warn('Errore nel parsing del JSON dello stream:', e, 'Event data:', eventData);
+                                // Continua con il prossimo evento
+                            }
                         }
                     }
                 }
                 
-                // Fine dello streaming
-                clearInterval(thinkingInterval); // Ferma l'animazione di pensiero
-                sendButton.disabled = false; // Riabilita il bottone di invio
-                userInput.focus(); // Riporta il focus sull'input
-                
             } catch (error) {
-                clearInterval(thinkingInterval); // Ferma l'animazione di pensiero anche in caso di errore
-                sendButton.disabled = false; // Riabilita il bottone di invio
                 console.error('Errore nella richiesta di chat:', error);
-                // Gestione dell'errore sulla UI
-                if (currentBubble) {
-                    currentBubble.innerHTML = `<span class="icon">🤖</span>Si è verificato un errore durante la comunicazione: ${error.message}`;
-                } else {
-                    addMessage(`Si è verificato un errore durante la comunicazione: ${error.message}`, 'bot');
+                
+                // Rimuovi il messaggio "Pensando..." se ancora presente
+                if (think.parentNode) {
+                    messages.removeChild(think);
                 }
+                clearInterval(thinkingInterval);
+                
+                // Mostra l'errore
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'chat-message bot';
+                errorDiv.innerHTML = `<div class="bubble"><span class="icon">🤖</span>Si è verificato un errore: ${error.message}</div>`;
+                messages.appendChild(errorDiv);
                 messages.scrollTop = messages.scrollHeight;
+                
+            } finally {
+                // Riabilita l'interfaccia
+                sendButton.disabled = false;
                 userInput.focus();
+                clearInterval(thinkingInterval);
             }
         }
 
