@@ -32,7 +32,7 @@ function corsWithWhitelist(req, res, next) {
     );
   } else {
     // Altrimenti blocca la richiesta CORS
-    return res.status(403).json({ error: 'Accesso non consentito dal dominio: ' + origin });
+    return res.status(403).json({ error: 'Accesso non consentito dal dominio: ' + origin, res: req });
   }
 
   // Gestione preflight
