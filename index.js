@@ -9,72 +9,56 @@ const port = 3000;
 const OPENWEBUI_BASE_URL = 'https://openwebuispg.sogiscuola.eu';
 const OPENWEBUI_API_KEY = 'sk-81625ddff3a74bf9b750e13664031dbf'; // Sostituisci con la tua API key
 
-const ALLOWED_DOMAINS = [
-    'https://testnodeoff.onrender.com',
-    'http://localhost:3000', // Per sviluppo locale
-    'http://127.0.0.1:3000',  // Per sviluppo locale
-    'https://etbnew.spaggiari.eu'
+const allowedOrigins = [
+  'https://miodominio1.com',
+  'https://miodominio2.it',
+  'http://localhost:4200',
+  'null',
+  'https://etbnew.spaggiari.eu'
 ];
 
+// Middleware per gestire CORS con whitelist
+function corsWithWhitelist(req, res, next) {
+  const origin = req.get('Origin');
 
-// Middleware per il controllo del dominio (Origin/Referer)
-function checkDomainAccess(req, res, next) {
-    const origin = req.get('Origin') || req.get('Referer');
-    
-    if (!origin) {
-        return res.status(403).json({ error: 'Accesso negato: Origin mancante' });
-    }
+  if (allowedOrigins.includes(origin)) {
+    // Se il dominio è nella whitelist, abilita CORS per quell’Origin
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header(
+      'Access-Control-Allow-Headers',
+      'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+    );
+  } else {
+    // Altrimenti blocca la richiesta CORS
+    return res.status(403).json({ error: 'Accesso non consentito dal dominio: ' + origin });
+  }
 
-    // Estrai il dominio base dall'URL
-    let domain;
-    try {
-        const url = new URL(origin);
-        domain = `${url.protocol}//${url.host}`;
-    } catch (error) {
-        return res.status(403).json({ error: 'Accesso negato: Origin non valido' });
-    }
+  // Gestione preflight
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
 
-    console.log(domain)
-
-    if (!ALLOWED_DOMAINS.includes(domain)) {
-        console.log(`❌ Accesso negato per dominio: ${domain}`);
-        return res.status(403).json({ error: 'Accesso negato: Dominio non autorizzato' });
-    }
-
-    console.log(`✅ Accesso consentito per dominio: ${domain}`);
-    next();
+  next();
 }
 
-// Middleware combinato per controllo completo
-function checkAccess(req, res, next) {
-    // Prima controlla il dominio
-    checkDomainAccess(req, res, (err) => {
-        if (err) return next(err);
-    });
-}
+// Usa il middleware al posto di quello attuale
+app.use(corsWithWhitelist);
 
 // Middleware per abilitare CORS
-app.use((req, res, next) => {
-    const origin = req.get('Origin');
-    console.log(`Richiesta da Origin: ${origin}`);
-    // Controlla se l'origin è autorizzato
-    if (origin && ALLOWED_DOMAINS.includes(origin)) {
-        res.header('Access-Control-Allow-Origin', origin);
-    } else if (!origin) {
-        // Per richieste senza Origin (come Postman), puoi decidere se permetterle
-        res.header('Access-Control-Allow-Origin', '*'); // RIMUOVI in produzione se non necessario
-    }
-    
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    next();
-});
+// app.use((req, res, next) => {
+//     res.header('Access-Control-Allow-Origin', '*');
+//     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+//     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+//     next();
+// });
 
 // Middleware per parsare il body delle richieste JSON
 app.use(bodyParser.json());
 
 // Endpoint per ottenere i modelli disponibili da OpenWebUI
-app.get('/models', checkAccess, async (req, res) => {
+app.get('/models', async (req, res) => {
     try {
         const response = await fetch(`${OPENWEBUI_BASE_URL}/api/v1/models/`, {
             headers: {
@@ -101,7 +85,7 @@ app.get('/models', checkAccess, async (req, res) => {
 });
 
 // Endpoint API per la chat con OpenWebUI
-app.post('/chat', checkAccess, async (req, res) => {
+app.post('/chat', async (req, res) => {
     const userInput = req.body.message;
     const conversation = req.body.conversation || [];
     const selectedModel = req.body.model || 'llama3.2:3b';
