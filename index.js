@@ -16,15 +16,6 @@ const ALLOWED_DOMAINS = [
     'https://etbnew.spaggiari.eu'
 ];
 
-// Lista degli IP autorizzati (opzionale)
-const ALLOWED_IPS = [
-    '192.168.1.100',
-    '10.0.0.50',
-    '127.0.0.1', // localhost per sviluppo
-    '18.156.158.53',
-    '18.156.42.200',
-    '52.59.103.54'
-];
 
 // Middleware per il controllo del dominio (Origin/Referer)
 function checkDomainAccess(req, res, next) {
@@ -54,36 +45,11 @@ function checkDomainAccess(req, res, next) {
     next();
 }
 
-// Middleware per il controllo dell'IP
-function checkIPAccess(req, res, next) {
-    // Se non hai configurato IP specifici, salta questo controllo
-    if (ALLOWED_IPS.length === 0) {
-        return next();
-    }
-
-    const clientIP = req.ip || 
-                     req.connection.remoteAddress || 
-                     req.socket.remoteAddress ||
-                     (req.connection.socket ? req.connection.socket.remoteAddress : null);
-
-    // Gestisci IPv6 loopback e IPv4 mappato
-    const normalizedIP = clientIP?.replace(/^::ffff:/, '') || clientIP;
-    
-    if (!normalizedIP || !ALLOWED_IPS.includes(normalizedIP)) {
-        console.log(`❌ Accesso negato per IP: ${normalizedIP}`);
-        return res.status(403).json({ error: 'Accesso negato: IP non autorizzato' });
-    }
-
-    console.log(`✅ Accesso consentito per IP: ${normalizedIP}`);
-    next();
-}
-
 // Middleware combinato per controllo completo
 function checkAccess(req, res, next) {
-    // Prima controlla il dominio, poi l'IP
+    // Prima controlla il dominio
     checkDomainAccess(req, res, (err) => {
         if (err) return next(err);
-        checkIPAccess(req, res, next);
     });
 }
 
