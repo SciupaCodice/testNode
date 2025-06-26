@@ -23,19 +23,23 @@ app.use(bodyParser.json());
 // Endpoint per ottenere i modelli disponibili da OpenWebUI
 app.get('/models', async (req, res) => {
     try {
-        const response = await fetch(`${OPENWEBUI_BASE_URL}/ollama/api/tags`, {
+        const response = await fetch(`${OPENWEBUI_BASE_URL}/api/v1/models/`, {
             headers: {
-                'Authorization': `Bearer ${OPENWEBUI_API_KEY}`
+                'Authorization': `Bearer ${OPENWEBUI_API_KEY}`,
             }
         });
-        
+
         if (!response.ok) {
             throw new Error(`Errore HTTP! Stato: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        const availableModels = data.models.map(model => model.name);
-        
+        // Extract both name and id for each model
+        const availableModels = data.map(model => ({
+            name: model.name,
+            id: model.id
+        }));
+
         res.json({ models: availableModels });
     } catch (error) {
         console.error('❌ Errore durante il recupero dei modelli da OpenWebUI:', error.message);
@@ -48,6 +52,9 @@ app.post('/chat', async (req, res) => {
     const userInput = req.body.message;
     const conversation = req.body.conversation || [];
     const selectedModel = req.body.model || 'llama3.2:3b';
+
+    console.log(req.body);
+    console.log(selectedModel)
 
     if (!userInput || userInput.trim() === '') {
         return res.status(400).json({ error: 'Il messaggio non può essere vuoto.' });
@@ -67,7 +74,7 @@ app.post('/chat', async (req, res) => {
 
     try {
         // Prima prova senza streaming per testare la connessione
-        const response = await fetch(`${OPENWEBUI_BASE_URL}/ollama/v1/chat/completions`, {
+        const response = await fetch(`${OPENWEBUI_BASE_URL}/api/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

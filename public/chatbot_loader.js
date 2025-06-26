@@ -564,8 +564,8 @@
         const models = await fetchModels();
         models.forEach(model => {
             const option = document.createElement('option');
-            option.value = model;
-            option.textContent = model;
+            option.value = model.id;
+            option.textContent = model.name;
             modelSelect.appendChild(option);
         });
 
