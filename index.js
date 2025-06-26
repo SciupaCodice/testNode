@@ -13,16 +13,21 @@ const allowedOrigins = [
   'https://miodominio1.com',
   'https://miodominio2.it',
   'http://localhost:4200',
-  'null',
-  'https://etbnew.spaggiari.eu'
+  'https://etbnew.spaggiari.eu',
+  'null'
 ];
 
 // Middleware per gestire CORS con whitelist
 function corsWithWhitelist(req, res, next) {
-  const origin = req.get('Origin');
+  console.log('Richiesta CORS ricevuta:', req.method, req.url, 'Origin:', req.get('Origin'));
+
+  // Prendi l'origin (può essere undefined, null o la stringa "null")
+  let origin = req.get('Origin');
+
+  // Se vuoi, aggiungi "null" proprio alla whitelist
+  // const allowedOrigins = [..., 'null'];
 
   if (allowedOrigins.includes(origin)) {
-    // Se il dominio è nella whitelist, abilita CORS per quell’Origin
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
@@ -31,17 +36,22 @@ function corsWithWhitelist(req, res, next) {
       'Origin, X-Requested-With, Content-Type, Accept, Authorization'
     );
   } else {
-    // Altrimenti blocca la richiesta CORS
-    return res.status(403).json({ error: 'Accesso non consentito dal dominio: ' + origin, res: req });
+    return res.status(403).json({ error: 'Accesso non consentito dal dominio: ' + origin });
   }
 
-  // Gestione preflight
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
   }
 
   next();
 }
+
+
+// Metti questo PRIMA di ogni altra cosa (prima di corsWithWhitelist)
+app.use((req, res, next) => {
+  console.log(`[LOGGER] ${req.method} ${req.url} – Origin:`, req.get('Origin'));
+  next();
+});
 
 // Usa il middleware al posto di quello attuale
 app.use(corsWithWhitelist);
