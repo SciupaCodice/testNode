@@ -12,7 +12,8 @@ const OPENWEBUI_API_KEY = 'sk-81625ddff3a74bf9b750e13664031dbf'; // Sostituisci 
 const ALLOWED_DOMAINS = [
     'https://testnodeoff.onrender.com',
     'http://localhost:3000', // Per sviluppo locale
-    'http://127.0.0.1:3000'  // Per sviluppo locale
+    'http://127.0.0.1:3000',  // Per sviluppo locale
+    'https://etbnew.spaggiari.eu'
 ];
 
 // Lista degli IP autorizzati (opzionale)
