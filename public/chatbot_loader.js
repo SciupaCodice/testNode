@@ -3,6 +3,8 @@
     const CHATBOT_API_URL = 'https://testnodeoff.onrender.com/chat';
     const MODELS_API_URL = 'https://testnodeoff.onrender.com/models';
 
+    let jwtActive = false; // Flag per verificare se il token JWT è attivo
+
     // Impostazioni predefinite
     const defaultSettings = {
         headerColor: '#005bbb',
@@ -11,65 +13,119 @@
         chatPosition: 'right'
     };
 
+    let hasJwtToken = false; // Flag per verificare se esiste un token JWT
+    let jwtSettings = {}; // Impostazioni dal token JWT
+
+    function decodeJwt(token = '') {
+        const jwtToken = token;
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            throw new Error('Il token JWT non è valido: deve avere 3 parti.');
+        }
+
+        const headerBase64Url = parts[0];
+        const payloadBase64Url = parts[1];
+        const signature = parts[2]; // La firma non viene decodificata qui, è per la verifica
+
+        // Funzione per decodificare Base64Url
+        function base64UrlDecode(str) {
+            // Sostituisci caratteri non standard per Base64Url
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            // Aggiungi padding se necessario
+            while (str.length % 4) {
+                str += '=';
+            }
+            // Decodifica Base64 e poi in stringa UTF-8
+            return decodeURIComponent(atob(str).split('').map(function (c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+
+        try {
+            const decodedHeader = JSON.parse(base64UrlDecode(headerBase64Url));
+            const decodedPayload = JSON.parse(base64UrlDecode(payloadBase64Url));
+
+            return {
+                header: decodedHeader,
+                payload: decodedPayload,
+                signature: signature // Puoi includere la firma se vuoi
+            };
+        } catch (e) {
+            console.error("Errore durante la decodifica o il parsing JSON:", e);
+            throw new Error('Impossibile decodificare il token JWT.');
+        }
+    }
+
     // Funzione per ottenere i parametri dal tag script
     function getScriptParameters() {
         const scriptTag = document.querySelector('#chatbot-loader');
         if (scriptTag) {
-            const params = {};
-            
-            // Leggi gli attributi data-* dal tag script
-            if (scriptTag.getAttribute('data-header-color')) {
-                params.headerColor = scriptTag.getAttribute('data-header-color');
+            const token = scriptTag.getAttribute('token');
+            if (token) {
+                try {
+                    const decodedToken = decodeJwt(token);
+                    if (decodedToken && decodedToken.payload) {
+                        hasJwtToken = true;
+                        jwtSettings = {
+                            headerColor: decodedToken.payload.headerColor || defaultSettings.headerColor,
+                            botBubbleColor: decodedToken.payload.botBubbleColor || defaultSettings.botBubbleColor,
+                            userBubbleColor: decodedToken.payload.userBubbleColor || defaultSettings.userBubbleColor,
+                            chatPosition: decodedToken.payload.chatPosition || defaultSettings.chatPosition
+                        };
+                        console.log('Impostazioni JWT trovate:', jwtSettings);
+                        jwtActive = true; // Imposta il flag JWT attivo
+                        return jwtSettings;
+                    }
+                } catch (error) {
+                    console.error('Errore nella decodifica del token JWT:', error);
+                }
             }
-            if (scriptTag.getAttribute('data-bot-bubble-color')) {
-                params.botBubbleColor = scriptTag.getAttribute('data-bot-bubble-color');
-            }
-            if (scriptTag.getAttribute('data-user-bubble-color')) {
-                params.userBubbleColor = scriptTag.getAttribute('data-user-bubble-color');
-            }
-            
-            return params;
         }
         return {};
     }
 
-    // Carica impostazioni con priorità: parametri script > localStorage > default
+    // Carica impostazioni con priorità: JWT > localStorage > default
     let settings = { ...defaultSettings };
 
     function saveSettingsToLocalStorage() {
-        localStorage.setItem('chatbotSettings', JSON.stringify(settings));
-        console.log('Impostazioni salvate in localStorage:', settings);
+        if (!hasJwtToken) { // Salva solo se non c'è un token JWT
+            localStorage.setItem('chatbotSettings', JSON.stringify(settings));
+            console.log('Impostazioni salvate in localStorage:', settings);
+        }
     }
 
     // Funzione per caricare le impostazioni da localStorage
     function loadSettingsFromLocalStorage() {
-        const savedSettings = localStorage.getItem('chatbotSettings');
-        if (savedSettings) {
-            console.log('Impostazioni caricate da localStorage:', JSON.parse(savedSettings));
-            return { ...defaultSettings, ...JSON.parse(savedSettings) };
+        if (!hasJwtToken) { // Carica solo se non c'è un token JWT
+            const savedSettings = localStorage.getItem('chatbotSettings');
+            if (savedSettings) {
+                console.log('Impostazioni caricate da localStorage:', JSON.parse(savedSettings));
+                return { ...defaultSettings, ...JSON.parse(savedSettings) };
+            }
         }
         return defaultSettings;
     }
 
     // Funzione per inizializzare le impostazioni con la giusta priorità
     function initializeSettings() {
-        // 1. Parti dalle impostazioni predefinite
-        let finalSettings = { ...defaultSettings };
+        // 1. Controlla se c'è un token JWT
+        const jwtParams = getScriptParameters();
         
-        // 2. Sovrascrivi con localStorage se presente
-        const localStorageSettings = loadSettingsFromLocalStorage();
-        if (localStorageSettings) {
-            finalSettings = { ...finalSettings, ...localStorageSettings };
+        if (hasJwtToken) {
+            // Se c'è un token JWT, usa sempre quelle impostazioni
+            console.log('Usando impostazioni da token JWT (priorità massima)');
+            return jwtSettings;
+        } else {
+            // Se non c'è token JWT, controlla localStorage
+            const localStorageSettings = loadSettingsFromLocalStorage();
+            if (localStorageSettings && JSON.stringify(localStorageSettings) !== JSON.stringify(defaultSettings)) {
+                console.log('Usando impostazioni da localStorage');
+                return localStorageSettings;
+            } else {
+                console.log('Usando impostazioni predefinite');
+                return defaultSettings;
+            }
         }
-        
-        // 3. Sovrascrivi con i parametri del tag script (massima priorità)
-        const scriptParams = getScriptParameters();
-        if (Object.keys(scriptParams).length > 0) {
-            finalSettings = { ...finalSettings, ...scriptParams };
-            console.log('Parametri dal tag script applicati:', scriptParams);
-        }
-        
-        return finalSettings;
     }
 
     async function fetchModels() {
@@ -475,8 +531,7 @@
         const header = document.createElement('div');
         header.className = 'chat-header';
         header.innerHTML = `
-            <span>Chatbot</span>
-            <button id="settings-btn" title="Impostazioni"><span style="color: white; font-size: 22px;">⚙</span></button>
+            <span>Chatbot</span>` + (!jwtActive ? `<button id="settings-btn" title="Impostazioni"><span style="color: white; font-size: 22px;">⚙</span></button>` : ``) + `
             <button id="close-chatbot-btn" title="Chiudi chat"><span style="color: white; font-size: 18px;">✖</span></button>
         `;
         container.appendChild(header);
@@ -734,6 +789,23 @@
             }
         });
 
+        modelSelect.addEventListener('change', () => {
+            // Reset della conversazione
+            conversation = [];
+            
+            // Svuota l'area messaggi
+            messages.innerHTML = '';
+            
+            // Ri-aggiungi il messaggio di benvenuto
+            const welcome = document.createElement('div');
+            welcome.className = 'chat-message bot';
+            welcome.innerHTML = `<div class="bubble"><span class="icon">🤖</span>Ciao! Come posso aiutarti?</div>`;
+            messages.appendChild(welcome);
+            
+            // Porta il focus sull'input
+            userInput.focus();
+        });
+
         // Toggle chat con lo stesso tasto
         toggleBtn.addEventListener('click', () => {
             // Chiudi le impostazioni solo se sono aperte e stiamo aprendo la chat
@@ -750,18 +822,20 @@
         });
 
         // Apertura pannello impostazioni
-        settingsBtn.addEventListener('click', () => {
-            // Se la chat è aperta, chiudila per aprire le impostazioni
-            if (container.style.display === 'flex') {
-                container.style.display = 'none';
-            }
-            // Apri o chiudi il pannello impostazioni
-            if (settingsPanel.style.display === 'flex') {
-                settingsPanel.style.display = 'none';
-            } else {
-                settingsPanel.style.display = 'flex';
-            }
-        });
+        if (!jwtActive) {
+            settingsBtn.addEventListener('click', () => {
+                // Se la chat è aperta, chiudila per aprire le impostazioni
+                if (container.style.display === 'flex') {
+                    container.style.display = 'none';
+                }
+                // Apri o chiudi il pannello impostazioni
+                if (settingsPanel.style.display === 'flex') {
+                    settingsPanel.style.display = 'none';
+                } else {
+                    settingsPanel.style.display = 'flex';
+                }
+            });
+        }
 
         // Chiusura tramite pulsante interno chat
         const closeInternalBtn = container.querySelector('#close-chatbot-btn');
