@@ -3,15 +3,101 @@ import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 
 const app = express();
-const port = 3000;
+const port = 3000; 
 
 // Configurazione OpenWebUI
 const OPENWEBUI_BASE_URL = 'https://openwebuispg.sogiscuola.eu';
 const OPENWEBUI_API_KEY = 'sk-81625ddff3a74bf9b750e13664031dbf'; // Sostituisci con la tua API key
 
+const ALLOWED_DOMAINS = [
+    'https://testnodeoff.onrender.com',
+    'http://localhost:3000', // Per sviluppo locale
+    'http://127.0.0.1:3000'  // Per sviluppo locale
+];
+
+// Lista degli IP autorizzati (opzionale)
+const ALLOWED_IPS = [
+    '192.168.1.100',
+    '10.0.0.50',
+    '127.0.0.1', // localhost per sviluppo
+    '18.156.158.53',
+    '18.156.42.200',
+    '52.59.103.54'
+];
+
+// Middleware per il controllo del dominio (Origin/Referer)
+function checkDomainAccess(req, res, next) {
+    const origin = req.get('Origin') || req.get('Referer');
+    
+    if (!origin) {
+        return res.status(403).json({ error: 'Accesso negato: Origin mancante' });
+    }
+
+    // Estrai il dominio base dall'URL
+    let domain;
+    try {
+        const url = new URL(origin);
+        domain = `${url.protocol}//${url.host}`;
+    } catch (error) {
+        return res.status(403).json({ error: 'Accesso negato: Origin non valido' });
+    }
+
+    console.log(domain)
+
+    if (!ALLOWED_DOMAINS.includes(domain)) {
+        console.log(`❌ Accesso negato per dominio: ${domain}`);
+        return res.status(403).json({ error: 'Accesso negato: Dominio non autorizzato' });
+    }
+
+    console.log(`✅ Accesso consentito per dominio: ${domain}`);
+    next();
+}
+
+// Middleware per il controllo dell'IP
+function checkIPAccess(req, res, next) {
+    // Se non hai configurato IP specifici, salta questo controllo
+    if (ALLOWED_IPS.length === 0) {
+        return next();
+    }
+
+    const clientIP = req.ip || 
+                     req.connection.remoteAddress || 
+                     req.socket.remoteAddress ||
+                     (req.connection.socket ? req.connection.socket.remoteAddress : null);
+
+    // Gestisci IPv6 loopback e IPv4 mappato
+    const normalizedIP = clientIP?.replace(/^::ffff:/, '') || clientIP;
+    
+    if (!normalizedIP || !ALLOWED_IPS.includes(normalizedIP)) {
+        console.log(`❌ Accesso negato per IP: ${normalizedIP}`);
+        return res.status(403).json({ error: 'Accesso negato: IP non autorizzato' });
+    }
+
+    console.log(`✅ Accesso consentito per IP: ${normalizedIP}`);
+    next();
+}
+
+// Middleware combinato per controllo completo
+function checkAccess(req, res, next) {
+    // Prima controlla il dominio, poi l'IP
+    checkDomainAccess(req, res, (err) => {
+        if (err) return next(err);
+        checkIPAccess(req, res, next);
+    });
+}
+
 // Middleware per abilitare CORS
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const origin = req.get('Origin');
+    console.log(`Richiesta da Origin: ${origin}`);
+    // Controlla se l'origin è autorizzato
+    if (origin && ALLOWED_DOMAINS.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+    } else if (!origin) {
+        // Per richieste senza Origin (come Postman), puoi decidere se permetterle
+        res.header('Access-Control-Allow-Origin', '*'); // RIMUOVI in produzione se non necessario
+    }
+    
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     next();
@@ -21,7 +107,7 @@ app.use((req, res, next) => {
 app.use(bodyParser.json());
 
 // Endpoint per ottenere i modelli disponibili da OpenWebUI
-app.get('/models', async (req, res) => {
+app.get('/models', checkAccess, async (req, res) => {
     try {
         const response = await fetch(`${OPENWEBUI_BASE_URL}/api/v1/models/`, {
             headers: {
@@ -48,7 +134,7 @@ app.get('/models', async (req, res) => {
 });
 
 // Endpoint API per la chat con OpenWebUI
-app.post('/chat', async (req, res) => {
+app.post('/chat', checkAccess, async (req, res) => {
     const userInput = req.body.message;
     const conversation = req.body.conversation || [];
     const selectedModel = req.body.model || 'llama3.2:3b';
