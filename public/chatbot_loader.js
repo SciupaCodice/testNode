@@ -3,6 +3,13 @@
     const CHATBOT_API_URL = 'https://testnodeoff.onrender.com/chat';
     const MODELS_API_URL = 'https://testnodeoff.onrender.com/models';
 
+    // Lista dei domini consentiti
+    const ALLOWED_DOMAINS = [
+        'https://testnodeoff.onrender.com',
+        'etbnew.spaggiari.eu',
+        'localhost' // Utile per lo sviluppo locale
+    ];
+
     let jwtActive = false; // Flag per verificare se il token JWT è attivo
 
     // Impostazioni predefinite
@@ -70,7 +77,8 @@
                             headerColor: decodedToken.payload.headerColor || defaultSettings.headerColor,
                             botBubbleColor: decodedToken.payload.botBubbleColor || defaultSettings.botBubbleColor,
                             userBubbleColor: decodedToken.payload.userBubbleColor || defaultSettings.userBubbleColor,
-                            chatPosition: decodedToken.payload.chatPosition || defaultSettings.chatPosition
+                            chatPosition: decodedToken.payload.chatPosition || defaultSettings.chatPosition,
+                            model: decodedToken.payload.model || 'casi-e-pareri---llama32' // Modello predefinito se non specificato
                         };
                         console.log('Impostazioni JWT trovate:', jwtSettings);
                         jwtActive = true; // Imposta il flag JWT attivo
@@ -183,6 +191,16 @@
     }
 
     async function initializeChatbot() {
+        // *** Blocco di controllo del dominio ***
+        const currentDomain = window.location.hostname;
+        const isAllowed = ALLOWED_DOMAINS.some(domain => currentDomain.includes(domain));
+
+        if (!isAllowed) {
+            console.warn(`Chatbot non caricato: il dominio "${currentDomain}" non è nella lista dei domini consentiti.`);
+            return; // Interrompi l'inizializzazione del chatbot
+        }
+        // *** Fine blocco di controllo del dominio ***
+
         // Inietta CSS base
         const css = `
         /* Icona tonda in basso a destra */

@@ -9,60 +9,13 @@ const port = 3000;
 const OPENWEBUI_BASE_URL = 'https://openwebuispg.sogiscuola.eu';
 const OPENWEBUI_API_KEY = 'sk-81625ddff3a74bf9b750e13664031dbf'; // Sostituisci con la tua API key
 
-const allowedOrigins = [
-  'https://miodominio1.com',
-  'https://miodominio2.it',
-  'http://localhost:4200',
-  'https://etbnew.spaggiari.eu',
-  'null'
-];
-
-// Middleware per gestire CORS con whitelist
-function corsWithWhitelist(req, res, next) {
-  console.log('Richiesta CORS ricevuta:', req.method, req.url, 'Origin:', req.get('Origin'));
-
-  // Prendi l'origin (può essere undefined, null o la stringa "null")
-  let origin = req.get('Origin');
-
-  // Se vuoi, aggiungi "null" proprio alla whitelist
-  // const allowedOrigins = [..., 'null'];
-
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Vary', 'Origin');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.header(
-      'Access-Control-Allow-Headers',
-      'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-    );
-  } else {
-    return res.status(403).json({ error: 'Accesso non consentito dal dominio: ' + origin });
-  }
-
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-
-  next();
-}
-
-
-// Metti questo PRIMA di ogni altra cosa (prima di corsWithWhitelist)
-app.use((req, res, next) => {
-  console.log(`[LOGGER] ${req.method} ${req.url} – Origin:`, req.get('Origin'));
-  next();
-});
-
-// Usa il middleware al posto di quello attuale
-app.use(corsWithWhitelist);
-
 // Middleware per abilitare CORS
-// app.use((req, res, next) => {
-//     res.header('Access-Control-Allow-Origin', '*');
-//     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-//     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-//     next();
-// });
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    next();
+});
 
 // Middleware per parsare il body delle richieste JSON
 app.use(bodyParser.json());
