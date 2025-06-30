@@ -7,7 +7,7 @@
     const ALLOWED_DOMAINS = [
         'https://testnodeoff.onrender.com',
         'etbnew.spaggiari.eu',
-        'localhost' // Utile per lo sviluppo locale
+        'paritariedev.sogiscuola.eu' // Utile per lo sviluppo locale
     ];
 
     let jwtActive = false; // Flag per verificare se il token JWT è attivo
