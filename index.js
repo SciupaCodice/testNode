@@ -1,6 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
+import jwt from 'jsonwebtoken';
 
 const app = express();
 const port = 3000; 
@@ -8,6 +9,8 @@ const port = 3000;
 // Configurazione OpenWebUI
 const OPENWEBUI_BASE_URL = 'https://openwebuispg.sogiscuola.eu';
 const OPENWEBUI_API_KEY = 'sk-81625ddff3a74bf9b750e13664031dbf'; // Sostituisci con la tua API key
+
+const JWT_SECRET = 'e8b7be43a2d9c582c3ecaa0e04236ffb';
 
 // Middleware per abilitare CORS
 app.use((req, res, next) => {
@@ -20,8 +23,33 @@ app.use((req, res, next) => {
 // Middleware per parsare il body delle richieste JSON
 app.use(bodyParser.json());
 
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ error: 'Accesso negato. Token mancante.' });
+    }
+
+    jwt.verify(
+        token,
+        JWT_SECRET,
+        { ignoreExpiration: true },    // <–– IGNORA la scadenza exp
+        (err, decoded) => {
+            if (err) {
+                // qui gestisci solo errori di firma o malformazione
+                return res.status(403).json({ error: 'Token non valido.' });
+            }
+
+            // decoded contiene header + payload, exp compreso se presente
+            req.user = decoded;
+            next();
+        }
+    );
+}
+
 // Endpoint per ottenere i modelli disponibili da OpenWebUI
-app.get('/models', async (req, res) => {
+app.get('/models', authenticateToken, async (req, res) => {
     try {
         const response = await fetch(`${OPENWEBUI_BASE_URL}/api/v1/models/`, {
             headers: {
@@ -34,21 +62,21 @@ app.get('/models', async (req, res) => {
         }
 
         const data = await response.json();
-        // Extract both name and id for each model
         const availableModels = data.map(model => ({
             name: model.name,
             id: model.id
         }));
 
-        res.json({ models: availableModels });
+        res.json({ models: availableModels, user: req.user }); // Includi i dati decodificati del token
     } catch (error) {
-        console.error('❌ Errore durante il recupero dei modelli da OpenWebUI:', error.message);
+        console.error('❌ Errore durante il recupero dei modelli:', error.message);
         res.status(500).json({ error: 'Impossibile recuperare i modelli disponibili in questo momento.' });
     }
 });
 
+
 // Endpoint API per la chat con OpenWebUI
-app.post('/chat', async (req, res) => {
+app.post('/chat', authenticateToken, async (req, res) => {
     const userInput = req.body.message;
     const conversation = req.body.conversation || [];
     const selectedModel = req.body.model || 'llama3.2:3b';

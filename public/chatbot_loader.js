@@ -1,95 +1,83 @@
 // chatbot-loader.js
-(function() {
+(function () {
     const CHATBOT_API_URL = 'https://testnodeoff.onrender.com/chat';
     const MODELS_API_URL = 'https://testnodeoff.onrender.com/models';
 
-    // Lista dei domini consentiti
-    const ALLOWED_DOMAINS = [
-        'https://testnodeoff.onrender.com',
-        'etbnew.spaggiari.eu',
-        'paritariedev.sogiscuola.eu' // Utile per lo sviluppo locale
-    ];
-
-    let jwtActive = false; // Flag per verificare se il token JWT è attivo
+    let jwtActive = false;      // Flag per verificare se il token JWT è attivo
+    let JWT_TOKEN = null;       // Il JWT estratto
+    let hasJwtToken = false;    // Flag per verificare se esiste un token JWT
+    let jwtSettings = {};       // Impostazioni ricavate dal token JWT
 
     // Impostazioni predefinite
     const defaultSettings = {
         headerColor: '#005bbb',
         botBubbleColor: '#eee',
         userBubbleColor: '#007bff',
-        chatPosition: 'right'
+        chatPosition: 'right',
+        model: 'casi-e-pareri---llama32',
+        allowedDomains: []      // Fallback se il token non contiene allowedDomains
     };
 
-    let hasJwtToken = false; // Flag per verificare se esiste un token JWT
-    let jwtSettings = {}; // Impostazioni dal token JWT
-
     function decodeJwt(token = '') {
-        const jwtToken = token;
+        if (!token) {
+            throw new Error('Il token JWT non può essere vuoto.');
+        }
         const parts = token.split('.');
         if (parts.length !== 3) {
-            throw new Error('Il token JWT non è valido: deve avere 3 parti.');
+            throw new Error('Il token JWT non è valido: deve avere 3 parti (header, payload, signature).');
         }
+        const [headerB64, payloadB64, signature] = parts;
 
-        const headerBase64Url = parts[0];
-        const payloadBase64Url = parts[1];
-        const signature = parts[2]; // La firma non viene decodificata qui, è per la verifica
-
-        // Funzione per decodificare Base64Url
         function base64UrlDecode(str) {
-            // Sostituisci caratteri non standard per Base64Url
-            str = str.replace(/-/g, '+').replace(/_/g, '/');
-            // Aggiungi padding se necessario
-            while (str.length % 4) {
-                str += '=';
-            }
-            // Decodifica Base64 e poi in stringa UTF-8
-            return decodeURIComponent(atob(str).split('').map(function (c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
+            let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const decoded = atob(base64);
+            return decodeURIComponent([...decoded].map(c =>
+                '%' + c.charCodeAt(0).toString(16).padStart(2, '0')
+            ).join(''));
         }
 
         try {
-            const decodedHeader = JSON.parse(base64UrlDecode(headerBase64Url));
-            const decodedPayload = JSON.parse(base64UrlDecode(payloadBase64Url));
-
-            return {
-                header: decodedHeader,
-                payload: decodedPayload,
-                signature: signature // Puoi includere la firma se vuoi
-            };
+            const header = JSON.parse(base64UrlDecode(headerB64));
+            const payload = JSON.parse(base64UrlDecode(payloadB64));
+            return { header, payload, signature };
         } catch (e) {
-            console.error("Errore durante la decodifica o il parsing JSON:", e);
-            throw new Error('Impossibile decodificare il token JWT.');
+            throw new Error('Errore nella decodifica o parsing JSON del token JWT: ' + e.message);
         }
     }
 
-    // Funzione per ottenere i parametri dal tag script
+    // Legge il token dal tag <script> e popola jwtSettings
     function getScriptParameters() {
         const scriptTag = document.querySelector('#chatbot-loader');
-        if (scriptTag) {
-            const token = scriptTag.getAttribute('token');
-            if (token) {
-                try {
-                    const decodedToken = decodeJwt(token);
-                    if (decodedToken && decodedToken.payload) {
-                        hasJwtToken = true;
-                        jwtSettings = {
-                            headerColor: decodedToken.payload.headerColor || defaultSettings.headerColor,
-                            botBubbleColor: decodedToken.payload.botBubbleColor || defaultSettings.botBubbleColor,
-                            userBubbleColor: decodedToken.payload.userBubbleColor || defaultSettings.userBubbleColor,
-                            chatPosition: decodedToken.payload.chatPosition || defaultSettings.chatPosition,
-                            model: decodedToken.payload.model || 'casi-e-pareri---llama32' // Modello predefinito se non specificato
-                        };
-                        console.log('Impostazioni JWT trovate:', jwtSettings);
-                        jwtActive = true; // Imposta il flag JWT attivo
-                        return jwtSettings;
-                    }
-                } catch (error) {
-                    console.error('Errore nella decodifica del token JWT:', error);
-                }
-            }
+        if (!scriptTag) return {};
+
+        const token = scriptTag.getAttribute('token');
+        if (!token) return {};
+
+        try {
+            const { payload } = decodeJwt(token);
+            hasJwtToken = true;
+            jwtActive = true;
+            JWT_TOKEN = token;
+
+            // Costruisci jwtSettings unendo defaultSettings con il payload
+            jwtSettings = {
+                headerColor: payload.headerColor || defaultSettings.headerColor,
+                botBubbleColor: payload.botBubbleColor || defaultSettings.botBubbleColor,
+                userBubbleColor: payload.userBubbleColor || defaultSettings.userBubbleColor,
+                chatPosition: payload.chatPosition || defaultSettings.chatPosition,
+                model: payload.model || defaultSettings.model,
+                allowedDomains: Array.isArray(payload.allowedDomains)
+                    ? payload.allowedDomains
+                    : defaultSettings.allowedDomains
+            };
+
+            console.log('Impostazioni JWT trovate:', jwtSettings);
+            return jwtSettings;
+        } catch (err) {
+            console.error('Errore nella decodifica del token JWT:', err);
+            return {};
         }
-        return {};
     }
 
     // Carica impostazioni con priorità: JWT > localStorage > default
@@ -118,7 +106,7 @@
     function initializeSettings() {
         // 1. Controlla se c'è un token JWT
         const jwtParams = getScriptParameters();
-        
+
         if (hasJwtToken) {
             // Se c'è un token JWT, usa sempre quelle impostazioni
             console.log('Usando impostazioni da token JWT (priorità massima)');
@@ -138,15 +126,20 @@
 
     async function fetchModels() {
         try {
-            const res = await fetch(MODELS_API_URL);
+            const res = await fetch(MODELS_API_URL, {
+                headers: jwtActive
+                    ? { 'Authorization': `Bearer ${JWT_TOKEN}` }
+                    : {}
+            });
             if (!res.ok) throw new Error('Errore nel recupero dei modelli');
             const data = await res.json();
             return data.models || [];
         } catch (error) {
             console.error('Errore durante il recupero dei modelli:', error);
-            return ['llama3.2:3b']; // Modello predefinito in caso di errore
+            return ['llama3.2:3b'];
         }
     }
+
 
     async function fetchSettings() {
         try {
@@ -191,13 +184,18 @@
     }
 
     async function initializeChatbot() {
-        // *** Blocco di controllo del dominio ***
+        settings = await fetchSettings();
+
+        // 2. Controllo del dominio consentito
         const currentDomain = window.location.hostname;
-        const isAllowed = ALLOWED_DOMAINS.some(domain => currentDomain.includes(domain));
+        const allowed = Array.isArray(settings.allowedDomains)
+            ? settings.allowedDomains
+            : [];
+        const isAllowed = allowed.includes(currentDomain);
 
         if (!isAllowed) {
             console.warn(`Chatbot non caricato: il dominio "${currentDomain}" non è nella lista dei domini consentiti.`);
-            return; // Interrompi l'inizializzazione del chatbot
+            return; // Esci se dominio non autorizzato
         }
         // *** Fine blocco di controllo del dominio ***
 
@@ -524,7 +522,7 @@
         styleEl.textContent = css;
         document.head.appendChild(styleEl);
 
-        settings = await fetchSettings();
+        // settings = await fetchSettings();
 
         // Applica stili dinamici
         updateStyles();
@@ -641,6 +639,10 @@
             option.textContent = model.name;
             modelSelect.appendChild(option);
         });
+
+        if (settings.model) {
+            modelSelect.value = settings.model; // Imposta il modello selezionato dalle impostazioni
+        }
 
         container.appendChild(modelSelect);
 
@@ -765,7 +767,7 @@
             preset.addEventListener('click', (e) => {
                 const color = e.target.getAttribute('data-color');
                 const target = e.target.getAttribute('data-target');
-                
+
                 if (target === 'header') {
                     settings.headerColor = color;
                     document.getElementById('header-color').value = color;
@@ -776,7 +778,7 @@
                     settings.userBubbleColor = color;
                     document.getElementById('user-bubble-color').value = color;
                 }
-                
+
                 updateColorPreviews();
                 updateStyles();
             });
@@ -810,16 +812,16 @@
         modelSelect.addEventListener('change', () => {
             // Reset della conversazione
             conversation = [];
-            
+
             // Svuota l'area messaggi
             messages.innerHTML = '';
-            
+
             // Ri-aggiungi il messaggio di benvenuto
             const welcome = document.createElement('div');
             welcome.className = 'chat-message bot';
             welcome.innerHTML = `<div class="bubble"><span class="icon">🤖</span>Ciao! Come posso aiutarti?</div>`;
             messages.appendChild(welcome);
-            
+
             // Porta il focus sull'input
             userInput.focus();
         });
@@ -879,7 +881,7 @@
             msgWrap.className = `chat-message ${sender}`;
             const bubble = document.createElement('div');
             bubble.className = 'bubble';
-            bubble.innerHTML = `<span class="icon">${sender==='user'?'👤':'🤖'}</span>${text}`;
+            bubble.innerHTML = `<span class="icon">${sender === 'user' ? '👤' : '🤖'}</span>${text}`;
             msgWrap.appendChild(bubble);
             messages.appendChild(msgWrap);
             messages.scrollTop = messages.scrollHeight;
@@ -903,21 +905,22 @@
             const thinkTxt = think.querySelector('#thinking-text');
             let dots = 0;
             thinkingInterval = setInterval(() => {
-                dots = (dots+1)%4;
+                dots = (dots + 1) % 4;
                 thinkTxt.textContent = 'Pensando' + '.'.repeat(dots);
             }, 500);
 
             // Inizia la parte di gestione dello stream
             let fullBotResponse = '';
             let currentBubble = null;
-            
+
             try {
                 const response = await fetch(CHATBOT_API_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        ...(jwtActive && { 'Authorization': `Bearer ${JWT_TOKEN}` })
                     },
-                    body: JSON.stringify({ message: txt, conversation: conversation, model: model }),
+                    body: JSON.stringify({ message: txt, conversation, model })
                 });
 
                 if (!response.ok) {
@@ -926,7 +929,7 @@
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
-                
+
                 // Rimuovi il messaggio "Pensando..."
                 messages.removeChild(think);
                 clearInterval(thinkingInterval);
@@ -936,7 +939,7 @@
                 botMessageDiv.className = 'chat-message bot';
                 botMessageDiv.innerHTML = `<div class="bubble"><span class="icon">🤖</span><span class="content"></span></div>`;
                 messages.appendChild(botMessageDiv);
-                
+
                 const contentSpan = botMessageDiv.querySelector('.content');
                 let buffer = ''; // Buffer per gestire chunk parziali
 
@@ -945,7 +948,7 @@
                     if (done) {
                         break;
                     }
-                    
+
                     // Decodifica il chunk
                     const chunk = decoder.decode(value, { stream: true });
                     buffer += chunk;
@@ -957,7 +960,7 @@
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             const eventData = line.substring(6);
-                            
+
                             // Salta eventi vuoti o di keep-alive
                             if (!eventData.trim() || eventData.trim() === '[DONE]') {
                                 continue;
@@ -965,23 +968,23 @@
 
                             try {
                                 const parsedData = JSON.parse(eventData);
-                                
+
                                 if (parsedData.type === 'chunk') {
                                     fullBotResponse += parsedData.content;
-                                    
+
                                     // Aggiorna il contenuto in tempo reale
                                     // Se hai una funzione per convertire markdown in HTML, usala qui
                                     contentSpan.textContent = fullBotResponse;
                                     // Oppure se vuoi supportare HTML/markdown:
                                     // contentSpan.innerHTML = convertMarkdownToHTML(fullBotResponse);
-                                    
+
                                     // Scrolla alla fine
                                     messages.scrollTop = messages.scrollHeight;
-                                    
+
                                 } else if (parsedData.type === 'end') {
                                     conversation = parsedData.conversation;
                                     break;
-                                    
+
                                 } else if (parsedData.type === 'error') {
                                     console.error('Errore dallo stream:', parsedData.error);
                                     contentSpan.textContent = `Errore: ${parsedData.error}`;
@@ -994,23 +997,23 @@
                         }
                     }
                 }
-                
+
             } catch (error) {
                 console.error('Errore nella richiesta di chat:', error);
-                
+
                 // Rimuovi il messaggio "Pensando..." se ancora presente
                 if (think.parentNode) {
                     messages.removeChild(think);
                 }
                 clearInterval(thinkingInterval);
-                
+
                 // Mostra l'errore
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'chat-message bot';
                 errorDiv.innerHTML = `<div class="bubble"><span class="icon">🤖</span>Si è verificato un errore: ${error.message}</div>`;
                 messages.appendChild(errorDiv);
                 messages.scrollTop = messages.scrollHeight;
-                
+
             } finally {
                 // Riabilita l'interfaccia
                 sendButton.disabled = false;
