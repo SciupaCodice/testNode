@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sito di Test per il Chatbot</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 0 15px;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        .content-section {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #777;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Benvenuti nel Mio Sito di Prova!</h1>
+    </header>
+
+    <main>
+        <div class="content-section">
+            <h2>Cos'è questo sito?</h2>
+            <p>Questo è un semplice sito web statico, creato unicamente per dimostrare come il tuo chatbot possa essere
+                integrato in qualsiasi pagina web esistente. Non ha funzionalità particolari, solo un po' di testo e una
+                struttura base.</p>
+            <p>Immagina che questa sia la homepage del tuo blog, un e-commerce, o qualsiasi altro tipo di sito.
+                L'obiettivo è vedere il chatbot apparire e funzionare correttamente senza interferire con il contenuto
+                principale.</p>
+        </div>
+
+        <div class="content-section">
+            <h2>Come Funziona il Test?</h2>
+            <p>Una volta aperto questo file HTML nel tuo browser, il piccolo script JavaScript che hai incluso caricherà
+                e inizializzerà il tuo chatbot. Dovresti vederlo apparire in basso a destra dello schermo.</p>
+            <p>Puoi interagire con il chatbot proprio come faresti se fosse l'unica cosa sulla pagina. Questo dimostra
+                la portabilità della tua soluzione.</p>
+        </div>
+
+        <div class="content-section">
+            <h2>Ultime Considerazioni</h2>
+            <p>Ricorda che il tuo server backend (quello che gestisce le richieste ad Ollama) deve essere in esecuzione
+                e accessibile dall'indirizzo specificato nel tuo `chatbot-loader.js`. Se il tuo backend è su
+                `http://localhost:3000` e stai testando localmente, dovrebbe funzionare senza problemi.</p>
+            <p>In un ambiente di produzione, `http://localhost:3000` dovrebbe essere sostituito con l'URL pubblico del
+                tuo server.</p>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Sito di Test. Tutti i diritti riservati. (Chatbot integrato per la dimostrazione)</p>
+    </footer>
+    
+
+    <script src="./public/chatbot_loader.js" id="chatbot-loader"
+        token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJoZWFkZXJDb2xvciI6IiMwMDVCQkIiLCJib3RCdWJibGVDb2xvciI6IiNlZWUiLCJ1c2VyQnViYmxlQ29sb3IiOiIjMDA3YmZmIiwibW9kZWwiOiJzcGctLS10cmFkdXR0b3JlLXYtMiIsImFsbG93ZWREb21haW5zIjpbImV0Ym5ldy5zcGFnZ2lhcmkuZXUiLCIiXX0.fFgQQ77WQzkIGROkXlWnJcgUXZ0v7kGiKf3eUB4PlgQ"></script>
+
+
+</body>
+
+</html>

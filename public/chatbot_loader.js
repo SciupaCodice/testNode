@@ -14,8 +14,8 @@
         botBubbleColor: '#eee',
         userBubbleColor: '#007bff',
         chatPosition: 'right',
-        model: 'casi-e-pareri---llama32',
-        allowedDomains: ["prototipo.spaggiari.eu", "etbnew.spaggiari.eu"]      // Fallback se il token non contiene allowedDomains
+        model: 'bergantini-v-2',
+        allowedDomains: ["prototipo.spaggiari.eu", "etbnew.spaggiari.eu", ""]      // Fallback se il token non contiene allowedDomains
     };
 
     function decodeJwt(token = '') {
@@ -60,8 +60,9 @@
             jwtActive = true;
             JWT_TOKEN = token;
 
-            let models = payload.model || defaultSettings.model;
-            models = models.filter(p => p.id == "bergantini-v-2");
+            // let models = [].concat(payload.model || defaultSettings.model).filter(p => p.id == "bergantini-v-2");
+
+            // console.log(payload.model || defaultSettings.model)
 
             // Costruisci jwtSettings unendo defaultSettings con il payload
             jwtSettings = {
@@ -69,7 +70,7 @@
                 botBubbleColor: payload.botBubbleColor || defaultSettings.botBubbleColor,
                 userBubbleColor: payload.userBubbleColor || defaultSettings.userBubbleColor,
                 chatPosition: payload.chatPosition || defaultSettings.chatPosition,
-                model: models,
+                model: defaultSettings.model,
                 allowedDomains: defaultSettings.allowedDomains
                 // allowedDomains: Array.isArray(payload.allowedDomains)
                 //     ? payload.allowedDomains
@@ -137,7 +138,7 @@
             });
             if (!res.ok) throw new Error('Errore nel recupero dei modelli');
             const data = await res.json();
-            return data.models || [];
+            return data.models.filter(p => p.id == "bergantini-v-2") || [];
         } catch (error) {
             console.error('Errore durante il recupero dei modelli:', error);
             return ['llama3.2:3b'];
