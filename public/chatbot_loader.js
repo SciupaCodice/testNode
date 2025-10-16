@@ -1,7 +1,7 @@
 // chatbot-loader.js
 (function () {
-    const CHATBOT_API_URL = 'https://testnodeoff.onrender.com/chat';
-    const MODELS_API_URL = 'https://testnodeoff.onrender.com/models';
+    const CHATBOT_API_URL = 'https://testnode-rhxt.onrender.com/chat';
+    const MODELS_API_URL = 'https://testnode-rhxt.onrender.com/models';
 
     let jwtActive = false;      // Flag per verificare se il token JWT è attivo
     let JWT_TOKEN = null;       // Il JWT estratto

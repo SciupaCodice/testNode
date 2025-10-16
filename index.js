@@ -8,7 +8,7 @@ const port = 3000;
 
 // Configurazione OpenWebUI
 const OPENWEBUI_BASE_URL = 'https://openwebuispg.sogiscuola.eu';
-const OPENWEBUI_API_KEY = 'sk-81625ddff3a74bf9b750e13664031dbf'; // Sostituisci con la tua API key
+const OPENWEBUI_API_KEY = 'sk-81625ddff3a74bf9b750e13664031dbf';
 
 const JWT_SECRET = 'e8b7be43a2d9c582c3ecaa0e04236ffb';
 
