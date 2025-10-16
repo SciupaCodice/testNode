@@ -60,13 +60,16 @@
             jwtActive = true;
             JWT_TOKEN = token;
 
+            let models = payload.model || defaultSettings.model;
+            models = models.filter(p => p.id == "bergantini-v-2");
+
             // Costruisci jwtSettings unendo defaultSettings con il payload
             jwtSettings = {
                 headerColor: payload.headerColor || defaultSettings.headerColor,
                 botBubbleColor: payload.botBubbleColor || defaultSettings.botBubbleColor,
                 userBubbleColor: payload.userBubbleColor || defaultSettings.userBubbleColor,
                 chatPosition: payload.chatPosition || defaultSettings.chatPosition,
-                model: payload.model || defaultSettings.model,
+                model: models,
                 allowedDomains: defaultSettings.allowedDomains
                 // allowedDomains: Array.isArray(payload.allowedDomains)
                 //     ? payload.allowedDomains
