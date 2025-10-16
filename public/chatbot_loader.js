@@ -15,7 +15,7 @@
         userBubbleColor: '#007bff',
         chatPosition: 'right',
         model: 'casi-e-pareri---llama32',
-        allowedDomains: []      // Fallback se il token non contiene allowedDomains
+        allowedDomains: ["prototipo.spaggiari.eu", "etbnew.spaggiari.eu"]      // Fallback se il token non contiene allowedDomains
     };
 
     function decodeJwt(token = '') {
@@ -67,9 +67,10 @@
                 userBubbleColor: payload.userBubbleColor || defaultSettings.userBubbleColor,
                 chatPosition: payload.chatPosition || defaultSettings.chatPosition,
                 model: payload.model || defaultSettings.model,
-                allowedDomains: Array.isArray(payload.allowedDomains)
-                    ? payload.allowedDomains
-                    : defaultSettings.allowedDomains
+                allowedDomains: defaultSettings.allowedDomains
+                // allowedDomains: Array.isArray(payload.allowedDomains)
+                //     ? payload.allowedDomains
+                //     : defaultSettings.allowedDomains
             };
 
             console.log('Impostazioni JWT trovate:', jwtSettings);
